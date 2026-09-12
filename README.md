@@ -12,11 +12,35 @@ jcd popular                          # 之后：用名字直接跳回去
 
 ## 安装
 
+**Linux / macOS，一条命令**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Violetylove/jump-cd/main/scripts/install.sh | sh
+```
+
+**Windows**：
+
+```powershell
+irm https://raw.githubusercontent.com/Violetylove/jump-cd/main/scripts/install.ps1 | iex
+```
+
+两个脚本会做同一串事：认出你的系统和架构 → 下载对应发布包 → 核对 SHA256 →
+装到用户级默认位置（Unix 是 `~/.local/bin`，Windows 是 `%LOCALAPPDATA%\Programs\jump-cd`）→
+确保该目录在 PATH 上 → **把 shell 集成写进你的启动文件，只写一次**。
+
+**或者用 Scoop**（Windows）：
+
+```powershell
+scoop bucket add atovio https://gitee.com/violetylove/atovio-scoop
+scoop install jump-cd
+```
+
+**从源码编译**：
+
 ```bash
 git clone https://github.com/Violetylove/jump-cd
 cd jump-cd
 go build -o jcd ./cmd/jcd
-# 把 jcd 放到 PATH 上（shell 函数靠名字找它）
 ```
 
 编译只用到标准库，**不需要联网**。

@@ -38,7 +38,26 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 | `internal/pathutil/` | 所有平台路径差异的收敛点 |
 | `internal/config/` | 环境变量与数据目录 |
 | `shell/` | 五套 shell 集成脚本 + `go:embed` |
-| `scripts/` | 端到端测试 |
+| `scripts/` | 端到端测试与安装脚本 |
+| `packaging/scoop/` | Scoop manifest，拷进 bucket 仓库即可 |
+
+## 安装脚本
+
+`scripts/install.sh` 与 `scripts/install.ps1` 负责下载、校验、装到用户级默认位置，
+并顺手把 shell 集成写进启动文件。
+
+两条硬性约束：
+
+- **`install.sh` 必须是 POSIX sh 且输出纯 ASCII**。它跑在用户碰巧拥有的任何 shell 里 ——
+  macOS 至今自带 bash 3.2，最小容器里可能只有 dash。
+- **`install.ps1` 必须纯 ASCII，且不能有 `param()` 块**。前者是因为 5.1 用系统
+  代码页读脚本文件，后者是因为文档里的用法是 `irm ... | iex`，param 块在那个形式下
+  不可靠。配置一律走环境变量。
+
+改完请手动验一遍：造一个假的发布包（tar.gz/zip + checksums.txt），用一个 MSYS 感知的
+假 `curl` 或本地 HTTP 服务喂给它，检查装到哪、启动文件写对没有、重复跑是否幂等、
+校验和不匹配时是否拒绝。**在 Windows 上直接跑 `install.sh` 会因为平台检测提前退出**，
+这是对的，别为此加特例。
 
 ## 硬性约束（违反 = 打回）
 
