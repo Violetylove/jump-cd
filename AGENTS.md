@@ -75,6 +75,12 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 - **Windows 文件锁**：`O_CREATE|O_EXCL` 在别人正创建或删除同名文件时返回的是
   「拒绝访问」而不是「已存在」。两者都要当作「先等等」重试。
 - **锁必须能接管陈旧文件**：持有者崩溃留下的锁若不处理，工具会永久卡死。
+- **PowerShell 脚本必须纯 ASCII**。Windows PowerShell 5.1 用控制台代码页解码
+  外部程序的输出，UTF-8 注释会被解错，解出来的字符可能破坏语法 —— 表现出来就是
+  「集成没定义出 jcd 函数」。`shell/embed_test.go` 里有守卫测试。
+- **PowerShell 不认 MSYS 路径**。`scripts/e2e.sh` 里传给 pwsh 的脚本路径要先转成原生形式。
+- **PowerShell 拿到的是字符串数组**。`& jcd init powershell` 的输出是多行，
+  要 `-join [char]10` 拼回一整段才能喂给 `Invoke-Expression`。
 - **测试别碰真实数据目录**：`JCD_*` 环境变量必须指向 `t.TempDir()`。
 
 ## 实测数据（做性能决定前请先看这里）

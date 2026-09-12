@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -433,7 +434,65 @@ func cmdInit(args []string) int {
 // ------------------------------------------------------------------ doctor
 
 func cmdDoctor() int {
-	fmt.Println("（待实现）")
+	fmt.Printf("jcd %s (commit %s)\n\n", version.Version, version.Commit)
+
+	// 二进制在不在 PATH 上 —— 这是集成失败最常见的原因。
+	if self, err := os.Executable(); err == nil {
+		fmt.Printf("可执行文件     %s\n", self)
+	}
+	if found, err := exec.LookPath("jcd"); err == nil {
+		fmt.Printf("PATH 里的 jcd  %s\n", found)
+	} else {
+		fmt.Println("PATH 里的 jcd  没找到")
+		fmt.Println("               shell 函数靠名字找二进制，得先把安装目录加进 PATH")
+	}
+
+	// 数据。
+	storePath, err := config.StorePath()
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Printf("数据文件       %s\n", storePath)
+
+	st := store.Open(storePath)
+	data, warn := st.Load()
+	if warn != nil {
+		fmt.Printf("               %v\n", warn)
+	}
+	fmt.Printf("记住 %d 个目录，累计 %d 次访问\n", data.Len(), data.TotalVisits())
+
+	// 日志。
+	journalPath, err := config.JournalPath()
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Printf("访问日志       %s\n", journalPath)
+	if entries, pErr := journal.Open(journalPath).Pending(); pErr == nil {
+		if len(entries) > 0 {
+			fmt.Printf("               待折叠 %d 条（下次敲 jcd 时自动处理）\n", len(entries))
+		} else {
+			fmt.Println("               没有待折叠的记录")
+		}
+	}
+
+	// 配置。
+	cfg := config.Load()
+	fmt.Printf("半衰期         %g 天\n", cfg.HalfLifeDays)
+	fmt.Printf("歧义阈值       %g\n", cfg.AmbiguousTau)
+	fmt.Printf("忽略规则       %d 条\n", len(cfg.Ignore))
+	for _, key := range []string{config.EnvDataDir, config.EnvHalfLife, config.EnvTau, config.EnvIgnore} {
+		if v := os.Getenv(key); v != "" {
+			fmt.Printf("环境变量       %s=%s\n", key, v)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("接入你的 shell（确认上面的 jcd 在 PATH 上之后）：")
+	fmt.Println("  zsh     echo 'eval \"$(jcd init zsh)\"' >> ~/.zshrc")
+	fmt.Println("  bash    echo 'eval \"$(jcd init bash)\"' >> ~/.bashrc")
+	fmt.Println("  fish    jcd init fish | source")
+	fmt.Println("  pwsh    Add-Content $PROFILE 'Invoke-Expression (&jcd init powershell)'")
+	fmt.Println("  nu      jcd init nushell | save -f ~/.jcd.nu")
 	return exitOK
 }
 

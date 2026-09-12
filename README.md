@@ -51,12 +51,18 @@ jcd init nushell | save -f ~/.jcd.nu
 jcd                    回到用户主目录
 jcd <路径>             进入这个目录，并记住它
 jcd <关键词...>        跳回之前去过的匹配目录
+jcd -                  回到上一个目录（跟 cd - 一样）
 jcd -l <关键词>        列出候选，不跳转
-jcd -f <关键词>        有多个候选时直接取最高分（默认不猜，让你说清楚）
+jcd -f <关键词>        有多个候选时直接取最高分（默认让你选）
 jcd list               列出记住的全部目录
 jcd add [路径]         只记录不跳转（shell hook 用，平时不用管）
 jcd init <shell>       输出 shell 集成脚本
+jcd doctor             体检：PATH、数据文件、shell 集成有没有接对
 ```
+
+候选多于一个时会列出编号让你选，直接回车就取消。
+
+打错一个字母也能找到：`jcd popluar` 一样能跳到 `popular`。
 
 ## 它怎么决定跳哪里
 
@@ -78,7 +84,10 @@ jcd init <shell>       输出 shell 集成脚本
 
 就是个 JSON 文件，带缩进，可以直接看、直接改。删掉它等于清空记忆。
 
-环境变量：`JCD_DATA_DIR`、`JCD_HALF_LIFE_DAYS`（默认 7）、`JCD_AMBIGUOUS_TAU`（默认 1.25）。
+环境变量：`JCD_DATA_DIR`、`JCD_HALF_LIFE_DAYS`（默认 7）、`JCD_AMBIGUOUS_TAU`（默认 1.25）、
+`JCD_IGNORE`（追加不记录的路径，如 `/cache/`）。
+
+`node_modules`、`.git`、`/tmp` 这类地方默认就不会被记住 —— 进去过不等于想再回来。
 
 ## 开发
 

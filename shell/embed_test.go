@@ -66,6 +66,19 @@ func TestScriptsHonourInvariants(t *testing.T) {
 	}
 }
 
+// PowerShell 脚本必须是纯 ASCII。
+//
+// Windows PowerShell 5.1 用控制台代码页解码外部程序的输出，非 ASCII 注释会被
+// 解错，解出来的字符可能破坏语法 —— 表现出来就是「集成没定义出 jcd 函数」。
+func TestPowerShellScriptIsASCII(t *testing.T) {
+	got := render(t, "powershell")
+	for i, r := range got {
+		if r > 127 {
+			t.Fatalf("jcd.ps1 必须纯 ASCII，第 %d 个字符是 %q", i, r)
+		}
+	}
+}
+
 func TestUnknownShellIsRejected(t *testing.T) {
 	if _, err := shell.Script("tcsh", nil); err == nil {
 		t.Fatal("expected an error for an unsupported shell")
