@@ -12,7 +12,7 @@ cd /somewhere/else
 jcd popular                          # 之后：用名字直接跳回去
 ```
 
-不做别的。没有模糊匹配引擎、没有导入导出、没有交互式选择器 —— 那些都在
+不做别的。没有导入导出、没有书签、没有统计面板、没有多机同步 —— 那些都在
 「以后可能加」的清单上，而不是「现在该有」。加功能前先问一句：它服务于上面那条主线吗？
 
 ## 命令
@@ -39,7 +39,6 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 | `internal/config/` | 环境变量与数据目录 |
 | `shell/` | 五套 shell 集成脚本 + `go:embed` |
 | `scripts/` | 端到端测试与安装脚本 |
-| `packaging/scoop/` | Scoop manifest，拷进 bucket 仓库即可 |
 
 ## 安装脚本
 
@@ -82,7 +81,8 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 - 错误用 `fmt.Errorf("...: %w", err)` 包装。
 - 表驱动测试，每个用例带描述。测试里不要碰真实 HOME，用 `t.TempDir()` + `t.Setenv`。
 - **文档注释写中文，标识符写英文。** 与用户交流用简体中文。
-- 提交信息用 Conventional Commits。
+- **提交信息一律用英文**（标题与正文都是），Conventional Commits 格式。
+  文档和代码注释仍然用中文。
 
 ## 陷阱清单
 

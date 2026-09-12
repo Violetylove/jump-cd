@@ -10,32 +10,40 @@ jcd popular                          # 之后：用名字直接跳回去
 
 一个文件、一个二进制、零外部依赖。Windows / macOS / Linux 都能跑。
 
-## 安装
+## 部署
 
-**Linux / macOS，一条命令**：
+### 一条命令装好
+
+**Linux / macOS**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Violetylove/jump-cd/main/scripts/install.sh | sh
 ```
 
-**Windows**：
+**Windows（PowerShell）**
 
 ```powershell
 irm https://raw.githubusercontent.com/Violetylove/jump-cd/main/scripts/install.ps1 | iex
 ```
 
-两个脚本会做同一串事：认出你的系统和架构 → 下载对应发布包 → 核对 SHA256 →
-装到用户级默认位置（Unix 是 `~/.local/bin`，Windows 是 `%LOCALAPPDATA%\Programs\jump-cd`）→
-确保该目录在 PATH 上 → **把 shell 集成写进你的启动文件，只写一次**。
+两个脚本做的是同一串事：
 
-**或者用 Scoop**（Windows）：
+1. 认出系统和架构
+2. 下载对应的发布包，核对 SHA256
+3. 装到用户级默认位置 —— Unix 是 `~/.local/bin`，Windows 是 `%LOCALAPPDATA%\Programs\jump-cd`
+4. 确保该目录在 PATH 上
+5. **把 shell 集成写进你的启动文件，只写一次**
 
-```powershell
-scoop bucket add atovio https://gitee.com/violetylove/atovio-scoop
-scoop install jump-cd
-```
+行为可以用环境变量改：
 
-**从源码编译**：
+| 变量 | 作用 |
+|---|---|
+| `JCD_VERSION` | 装指定版本，而不是最新版 |
+| `JCD_INSTALL_DIR` | 换安装目录 |
+| `JCD_BASE_URL` | 换下载源（用镜像时） |
+| `JCD_NO_SHELL_SETUP=1` | 只装二进制，不碰启动文件 |
+
+### 从源码编译
 
 ```bash
 git clone https://github.com/Violetylove/jump-cd
@@ -43,9 +51,34 @@ cd jump-cd
 go build -o jcd ./cmd/jcd
 ```
 
-编译只用到标准库，**不需要联网**。
+只要 Go 1.25+ 和标准库，**编译过程不需要联网**。把产物放进 PATH 上任意一个目录，
+再按下面「接进 shell」手动接一次。
 
-## 启用
+### 会写哪些文件
+
+| 路径 | 是什么 |
+|---|---|
+| `<安装目录>/jcd`（Windows 是 `jcd.exe`） | 二进制 |
+| `~/.local/share/jump-cd/dirs.json` | 记住的目录，一个带缩进的 JSON |
+| `~/.local/share/jump-cd/journal` | 待折叠的访问日志，平时是空的 |
+| 你的启动文件（`~/.zshrc` / `$PROFILE` 等） | 一小段 shell 集成，带 `# jump-cd` 注释 |
+
+### 升级
+
+重跑一次安装命令就行。它会覆盖二进制，并**跳过**已经写好的那段启动文件。
+
+### 卸载
+
+```bash
+rm -f  ~/.local/bin/jcd          # Windows: 删掉 %LOCALAPPDATA%\Programs\jump-cd 整个目录
+rm -rf ~/.local/share/jump-cd    # Windows: %LOCALAPPDATA%\jump-cd
+```
+
+再从启动文件里删掉带 `# jump-cd` 的那三行，就干净了。
+
+## 接进 shell
+
+用安装脚本装的，这一步已经替你做完了。从源码编译的，需要手动接一次。
 
 `jcd` 是「函数 + 二进制」的组合：二进制负责算出路径，函数负责在你当前这个 shell 里 `cd`。
 子进程改不了父 shell 的目录，这是操作系统的限制，任何语言都一样。

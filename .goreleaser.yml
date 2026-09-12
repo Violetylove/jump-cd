@@ -26,8 +26,8 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    # 显式写出来，因为 Scoop manifest 里的文件名必须和它逐字对上。
-    # 默认值虽然也是这个形状，但"默认值"是会随版本变的东西。
+    # 显式写出来：安装脚本要按这个名字拼下载地址，必须和实际产物逐字对上，
+    # 而"默认值"是会随 goreleaser 版本变的东西。
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
