@@ -16,7 +16,12 @@ norm() {
   ( cd "$1" && { pwd -W 2>/dev/null || pwd; } )
 }
 
-work_msys=$(mktemp -d)
+# 刻意不用 mktemp：它落在 /tmp 下（CI 上 TMPDIR 未设置时必然如此），
+# 而 /tmp/ 正在默认忽略名单里 —— 于是 e2e 记录的每一条都会被过滤掉，
+# 测试自己把自己绊倒。放到 HOME 下面就没有这个冲突。
+work_msys="$HOME/.jcd-e2e.$$"
+rm -rf "$work_msys"
+mkdir -p "$work_msys"
 work=$(norm "$work_msys")
 trap 'rm -rf "$work_msys"' EXIT
 

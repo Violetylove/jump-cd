@@ -6,11 +6,25 @@
 #   2. The hot path must not spawn a process. Add-Content is a cmdlet, so
 #      recording a visit costs nothing.
 #
-# This file is deliberately ASCII-only. Windows PowerShell 5.1 decodes an
-# external command's output using the console code page, so non-ASCII comments
-# can be mis-decoded into characters that break parsing. There is a test for it.
+# ASCII-only on purpose: Windows PowerShell 5.1 decodes an external command's
+# output using the console code page, so non-ASCII comments can be mis-decoded
+# into characters that break parsing. There is a test for it.
 #
 # [char]9 is a tab, spelled that way to avoid a backtick escape in the source.
+
+# Resolve the binary once, as an *Application*. Two reasons this is done here
+# and not inline:
+#   - filtering by Application type keeps "jcd" from resolving to the function
+#     below and calling itself forever;
+#   - the executable name is platform-dependent ("jcd.exe" on Windows, "jcd"
+#     elsewhere), so hardcoding it would break every non-Windows host.
+$__jcd_cmd = Get-Command jcd -CommandType Application -ErrorAction SilentlyContinue |
+             Select-Object -First 1
+$Global:__jcd_bin = $null
+if ($__jcd_cmd) { $Global:__jcd_bin = $__jcd_cmd.Source }
+if (-not $Global:__jcd_bin) {
+    if ($env:OS -eq 'Windows_NT') { $Global:__jcd_bin = 'jcd.exe' } else { $Global:__jcd_bin = 'jcd' }
+}
 
 $Global:__jcd_journal = '__JCD_JOURNAL__'
 
@@ -38,19 +52,16 @@ function global:prompt {
 
 function global:jcd {
     # Subcommands are forwarded to the binary; anything else is a jump query.
-    # "jcd.exe" must be spelled with the extension, or this recurses into itself.
     $reserved = @('add', 'init', 'query', 'list', 'version', 'help', 'doctor',
                   '--help', '-h', '--version', '-V')
     if ($args.Count -gt 0) {
         $first = [string]$args[0]
         if (($reserved -contains $first) -or $first.StartsWith('__')) {
-            & jcd.exe @args
+            & $Global:__jcd_bin @args
             return
         }
     }
-    # "-" means the previous directory; the binary reads OLDPWD, which
-    # PowerShell does not set, so fall back to a jump query.
-    $target = & jcd.exe query @args
+    $target = & $Global:__jcd_bin query @args
     if ($LASTEXITCODE -ne 0 -or -not $target) {
         return
     }

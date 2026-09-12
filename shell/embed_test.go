@@ -79,6 +79,18 @@ func TestPowerShellScriptIsASCII(t *testing.T) {
 	}
 }
 
+// PowerShell 集成必须用 Get-Command 解析二进制，不能写死名字：
+// Linux/macOS 上的可执行文件叫 jcd，没有 .exe 后缀。
+func TestPowerShellResolvesTheBinary(t *testing.T) {
+	got := render(t, "powershell")
+	if !strings.Contains(got, "Get-Command") {
+		t.Fatal("PowerShell 集成应当用 Get-Command 解析二进制，而不是写死名字")
+	}
+	if !strings.Contains(got, "CommandType Application") {
+		t.Fatal("必须按 Application 类型过滤，否则 jcd 会解析到函数本身并无限递归")
+	}
+}
+
 func TestUnknownShellIsRejected(t *testing.T) {
 	if _, err := shell.Script("tcsh", nil); err == nil {
 		t.Fatal("expected an error for an unsupported shell")
