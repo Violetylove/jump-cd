@@ -7,8 +7,10 @@
 # system code page, so non-ASCII text here would be mis-decoded.
 $ErrorActionPreference = 'Stop'
 
-# The binary prints several lines; PowerShell hands that back as an array.
-Invoke-Expression ((& $env:JCD_BIN init powershell) -join [char]10)
+# Load the integration with exactly the line the docs and the installer hand to
+# users. If this needs a workaround to work, then the documented line is wrong
+# and every user gets a broken profile - which is exactly what happened once.
+Invoke-Expression (& { (jcd init powershell | Out-String) })
 
 if (-not (Get-Command jcd -CommandType Function -ErrorAction SilentlyContinue)) {
     throw 'the integration did not define a jcd function'

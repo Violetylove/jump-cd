@@ -98,8 +98,14 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
   外部程序的输出，UTF-8 注释会被解错，解出来的字符可能破坏语法 —— 表现出来就是
   「集成没定义出 jcd 函数」。`shell/embed_test.go` 里有守卫测试。
 - **PowerShell 不认 MSYS 路径**。`scripts/e2e.sh` 里传给 pwsh 的脚本路径要先转成原生形式。
-- **PowerShell 拿到的是字符串数组**。`& jcd init powershell` 的输出是多行，
-  要 `-join [char]10` 拼回一整段才能喂给 `Invoke-Expression`。
+- **PowerShell 会把外部程序的多行输出变成一个数组**，而 `Invoke-Expression` 只收单个
+  字符串。给用户的那一行必须写成 `Invoke-Expression (& { (jcd init powershell | Out-String) })`。
+  写成 `Invoke-Expression (&jcd init powershell)` 会在**每一个** PowerShell 用户的
+  profile 里报 "Cannot convert System.Object[]"。
+- **测试绕过的地方就是 bug 藏身的地方。** `scripts/e2e-inner.ps1` 必须用文档里一字不差的
+  那一行来加载集成，不许自己加 workaround。上面那个 bug 之所以能躲过整个 CI，就是因为
+  e2e 用了 `-join [char]10` 自己拼了一遍：用户拿到的是坏的，而 CI 是绿的。
+  凡是要给用户的命令串，e2e 都必须原样执行一遍。
 - **macOS 自带的是 bash 3.2**。变量名后面紧跟非 ASCII 字符时（哪怕只是中文括号），
   它会把那个字符的字节当成变量名的一部分，配合 `set -u` 直接致命；而 Windows 和
   Linux 的 bash 5 完全不报错。规矩：变量名一律加花括号。`shell/embed_test.go` 有守卫测试。

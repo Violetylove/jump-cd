@@ -159,6 +159,45 @@ func varThenNonASCII(b []byte) string {
 	return ""
 }
 
+// 给用户的 PowerShell 接入行必须是真能跑的那种。
+//
+// 这条踩过：Invoke-Expression 收到的是外部程序输出的字符串数组，不是单个字符串，
+// 于是每个 PowerShell 用户的 profile 都会报 "Cannot convert System.Object[]"。
+// 当时 e2e 自己用 -join 拼了一遍绕过去了，CI 全绿，用户全挂。
+func TestPowerShellInitLineIsUsable(t *testing.T) {
+	files := []string{
+		filepath.Join("..", "README.md"),
+		filepath.Join("..", "internal", "cli", "cli.go"),
+		filepath.Join("..", "scripts", "install.ps1"),
+		filepath.Join("..", "scripts", "e2e-inner.ps1"),
+	}
+
+	found := 0
+	for _, path := range files {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("读取 %s: %v", path, err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if !strings.Contains(line, "Invoke-Expression") || !strings.Contains(line, "jcd init") {
+				continue
+			}
+			// install.ps1 故意留着旧写法，用来识别并修好已经写坏的 profile。
+			if strings.Contains(line, "$brokenLine") {
+				continue
+			}
+			found++
+			if !strings.Contains(line, "Out-String") {
+				t.Fatalf("%s:%d 的 PowerShell 接入行少了 Out-String，会给用户一个跑不起来的 profile：%s",
+					path, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatal("一处 PowerShell 接入行都没扫到，路径写错了？")
+	}
+}
+
 func TestUnknownShellIsRejected(t *testing.T) {
 	if _, err := shell.Script("tcsh", nil); err == nil {
 		t.Fatal("expected an error for an unsupported shell")

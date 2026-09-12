@@ -491,7 +491,7 @@ func cmdDoctor() int {
 	fmt.Println("  zsh     echo 'eval \"$(jcd init zsh)\"' >> ~/.zshrc")
 	fmt.Println("  bash    echo 'eval \"$(jcd init bash)\"' >> ~/.bashrc")
 	fmt.Println("  fish    jcd init fish | source")
-	fmt.Println("  pwsh    Add-Content $PROFILE 'Invoke-Expression (&jcd init powershell)'")
+	fmt.Println("  pwsh    Add-Content $PROFILE 'Invoke-Expression (& { (jcd init powershell | Out-String) })'")
 	fmt.Println("  nu      jcd init nushell | save -f ~/.jcd.nu")
 	return exitOK
 }

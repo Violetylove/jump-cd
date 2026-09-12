@@ -94,7 +94,7 @@ echo 'eval "$(jcd init bash)"' >> ~/.bashrc
 jcd init fish | source
 
 # PowerShell
-Add-Content $PROFILE 'Invoke-Expression (&jcd init powershell)'
+Add-Content $PROFILE 'Invoke-Expression (& { (jcd init powershell | Out-String) })'
 
 # nushell
 jcd init nushell | save -f ~/.jcd.nu

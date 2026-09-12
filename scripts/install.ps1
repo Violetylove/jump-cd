@@ -173,10 +173,25 @@ try {
             New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
         }
 
-        if ((Test-Path -Path $profilePath) -and (Select-String -Path $profilePath -SimpleMatch 'jcd init' -Quiet)) {
+        # v0.1.0 wrote a line that could not work: Invoke-Expression was handed a
+        # string array instead of a string. Repair it in place, so that simply
+        # re-running this installer fixes an affected profile.
+        $brokenLine = 'Invoke-Expression (&jcd init powershell)'
+        $goodLine   = 'Invoke-Expression (& { (jcd init powershell | Out-String) })'
+
+        $profileText = ''
+        if (Test-Path -Path $profilePath) {
+            $profileText = Get-Content -Path $profilePath -Raw
+            if (-not $profileText) { $profileText = '' }
+        }
+
+        if ($profileText.Contains($brokenLine)) {
+            Set-Content -Path $profilePath -Value $profileText.Replace($brokenLine, $goodLine) -NoNewline
+            Info "repaired the broken integration line in $profilePath"
+        } elseif ($profileText.Contains('jcd init')) {
             Info "$profilePath already contains the integration, leaving it alone"
         } else {
-            Add-Content -Path $profilePath -Value '', '# jump-cd', 'Invoke-Expression (&jcd init powershell)'
+            Add-Content -Path $profilePath -Value '', '# jump-cd', $goodLine
             Info "appended to $profilePath"
         }
     }
@@ -189,7 +204,7 @@ try {
     Write-Host ''
     Write-Host 'Open a new PowerShell window, or run this in the current one:'
     Write-Host ''
-    Write-Host '    Invoke-Expression (&jcd init powershell)'
+    Write-Host '    Invoke-Expression (& { (jcd init powershell | Out-String) })'
     Write-Host ''
     Write-Host 'Then check everything with:'
     Write-Host ''
