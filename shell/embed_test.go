@@ -1,6 +1,8 @@
 package shell_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -89,6 +91,72 @@ func TestPowerShellResolvesTheBinary(t *testing.T) {
 	if !strings.Contains(got, "CommandType Application") {
 		t.Fatal("必须按 Application 类型过滤，否则 jcd 会解析到函数本身并无限递归")
 	}
+}
+
+// 变量展开后面不能紧跟非 ASCII 字符。
+//
+// macOS 自带的是 bash 3.2：变量名后面直接跟一个多字节字符时，它会把那个字符的
+// 字节当成变量名的一部分，于是变量名整个变了，配合 set -u 直接致命。
+// Windows 和 Linux 上的 bash 5 完全不会报错 —— 典型的「只有 CI 才看得见」。
+// 规矩很简单：变量名一律加花括号。
+func TestShellScriptsAvoidVarFollowedByNonASCII(t *testing.T) {
+	patterns := []string{
+		filepath.Join("..", "scripts", "*"),
+		filepath.Join("..", "shell", "jcd.*"),
+	}
+
+	checked := 0
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatalf("glob %s: %v", pattern, err)
+		}
+		for _, path := range matches {
+			info, err := os.Stat(path)
+			if err != nil || info.IsDir() {
+				continue
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("读取 %s: %v", path, err)
+			}
+			if bad := varThenNonASCII(b); bad != "" {
+				t.Fatalf("%s 里有「变量后面紧跟非 ASCII 字符」：%s（给变量名加花括号）", path, bad)
+			}
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("一个 shell 脚本都没扫到，路径写错了？")
+	}
+}
+
+// varThenNonASCII 找出形如「美元符号 + 变量名 + 非 ASCII 字符」的片段，返回它用于报错。
+func varThenNonASCII(b []byte) string {
+	isNameStart := func(c byte) bool {
+		return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+	}
+	isNameByte := func(c byte) bool {
+		return isNameStart(c) || (c >= '0' && c <= '9')
+	}
+
+	for i := 0; i < len(b); i++ {
+		if b[i] != '$' || i+1 >= len(b) || !isNameStart(b[i+1]) {
+			continue
+		}
+		j := i + 1
+		for j < len(b) && isNameByte(b[j]) {
+			j++
+		}
+		if j < len(b) && b[j] >= 0x80 {
+			end := j + 1
+			for end < len(b) && b[end]&0xC0 == 0x80 {
+				end++
+			}
+			return string(b[i:end])
+		}
+	}
+	return ""
 }
 
 func TestUnknownShellIsRejected(t *testing.T) {

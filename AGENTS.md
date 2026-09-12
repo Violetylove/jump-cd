@@ -81,6 +81,9 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 - **PowerShell 不认 MSYS 路径**。`scripts/e2e.sh` 里传给 pwsh 的脚本路径要先转成原生形式。
 - **PowerShell 拿到的是字符串数组**。`& jcd init powershell` 的输出是多行，
   要 `-join [char]10` 拼回一整段才能喂给 `Invoke-Expression`。
+- **macOS 自带的是 bash 3.2**。变量名后面紧跟非 ASCII 字符时（哪怕只是中文括号），
+  它会把那个字符的字节当成变量名的一部分，配合 `set -u` 直接致命；而 Windows 和
+  Linux 的 bash 5 完全不报错。规矩：变量名一律加花括号。`shell/embed_test.go` 有守卫测试。
 - **测试别碰真实数据目录**：`JCD_*` 环境变量必须指向 `t.TempDir()`。
 
 ## 实测数据（做性能决定前请先看这里）

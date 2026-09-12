@@ -53,7 +53,9 @@ run_shell() {
   shell="$1"
   script="$2"
   if ! command -v "$shell" > /dev/null 2>&1; then
-    echo "skip $shell（未安装）"
+    # 变量名必须加花括号：macOS 自带 bash 3.2，$shell 后面紧跟多字节字符时
+    # 它会把那个字符的字节当成变量名的一部分，配合 set -u 直接致命。
+    echo "skip ${shell}（未安装）"
     return 0
   fi
 
