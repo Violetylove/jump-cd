@@ -229,3 +229,76 @@ func TestKeywordsNormalisation(t *testing.T) {
 		t.Fatalf("Keywords = %v", got)
 	}
 }
+
+// 回归：目录名命中不能被「访问次数很高的祖先段命中」顶下去。
+//
+// 曾经的排序只按分数比大小。一个被 cd 过 32 次的深层目录，靠祖先段里恰好
+// 路过 winter-space 命中，拿到 40 x 21 = 840 分；而名字就叫 winter-space、
+// 只去过 3 次的那条只有 80 x 4 = 320 分 —— jcd winter-spa 于是跳去了深层目录，
+// 连 jcd winter-space 这种把名字打全的查询都跳不对。
+func TestSearchPrefersTheNamedDirectoryOverAHotAncestor(t *testing.T) {
+	d := store.NewData()
+	named := "/home/u/winter-space"
+	hot := "/home/u/winter-space/code-space/pwsh-hu-line"
+	for i := 0; i < 3; i++ {
+		d.Touch(named, now)
+	}
+	for i := 0; i < 32; i++ {
+		d.Touch(hot, now)
+	}
+
+	got := Search(d, []string{"winter-spa"}, now, 7)
+	if len(got) != 2 {
+		t.Fatalf("应当有 2 条候选，实际 %d 条：%+v", len(got), got)
+	}
+	if got[0].Path != named {
+		t.Fatalf("top = %q，名字命中的应当排第一", got[0].Path)
+	}
+	if !got[0].Anchored || got[1].Anchored {
+		t.Fatalf("命中类别判定反了：%+v", got)
+	}
+	// 排序对了还不够：决策层若仍拿原始分数比值判歧义，这里会退化成「问用户」。
+	if dec := Decide(got, 1.25, 10); dec.Outcome != OutcomeUnique || dec.Best.Path != named {
+		t.Fatalf("decision = %+v，应当确定地跳到名字命中的那条", dec)
+	}
+}
+
+// 歧义只在同类之间判：末段命中与祖先段命中不是一个意图，分数不该互相比较。
+func TestDecideComparesWithinClass(t *testing.T) {
+	mixed := []Candidate{
+		{Path: "/named", Anchored: true, Score: 10},
+		{Path: "/ancestor", Score: 1000},
+	}
+	if got := Decide(mixed, 1.25, 10); got.Outcome != OutcomeUnique || got.Best.Path != "/named" {
+		t.Fatalf("唯一的末段命中不该被判成歧义：%+v", got)
+	}
+
+	sameClass := []Candidate{
+		{Path: "/a", Anchored: true, Score: 100},
+		{Path: "/b", Anchored: true, Score: 95},
+		{Path: "/c", Score: 9999},
+	}
+	if got := Decide(sameClass, 1.25, 10); got.Outcome != OutcomeAmbiguous {
+		t.Fatalf("同类中两条不相上下时仍应当判歧义，实际 %v", got.Outcome)
+	}
+}
+
+// isBaseQuality 靠「末段档位全部高于中间段档位」这个不变量把质量换算成类别。
+// 这里守住它，免得哪天调档位时悄悄把两类段弄反。
+func TestBaseTiersAllOutrankMiddleTiers(t *testing.T) {
+	base := []float64{qualityBaseContain, qualityBaseFuzzy, qualityBasePrefix, qualityBaseExact}
+	middle := []float64{qualitySegContain, qualitySegPrefix, qualitySegExact}
+	for _, b := range base {
+		for _, m := range middle {
+			if b <= m {
+				t.Fatalf("末段档位 %v 不高于中间段档位 %v，isBaseQuality 的假设被打破", b, m)
+			}
+		}
+	}
+	if isBaseQuality(qualitySegExact) {
+		t.Fatal("中间段全等被误判成末段命中")
+	}
+	if !isBaseQuality(qualityBaseContain) {
+		t.Fatal("末段子串被误判成非末段命中")
+	}
+}

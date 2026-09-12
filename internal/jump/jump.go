@@ -44,9 +44,12 @@ const maxVisitWeight = 20
 type Candidate struct {
 	Path    string
 	Quality float64
-	Visits  int64
-	Last    int64
-	Score   float64
+	// Anchored 表示命中落在目录自己的名字（末段）上，而不是某个祖先段。
+	// 排序时它先于分数：用户打的是目录名，不是祖先的名字。
+	Anchored bool
+	Visits   int64
+	Last     int64
+	Score    float64
 }
 
 // Search 在历史里找匹配的目录，按分数降序返回。
@@ -58,11 +61,12 @@ func Search(d *store.Data, keywords []string, now int64, halfLifeDays float64) [
 			continue
 		}
 		out = append(out, Candidate{
-			Path:    path,
-			Quality: q,
-			Visits:  e.Visits,
-			Last:    e.Last,
-			Score:   score(q, e, now, halfLifeDays),
+			Path:     path,
+			Quality:  q,
+			Anchored: isBaseQuality(q),
+			Visits:   e.Visits,
+			Last:     e.Last,
+			Score:    score(q, e, now, halfLifeDays),
 		})
 	}
 	sortCandidates(out)
@@ -102,6 +106,13 @@ func matchQuality(path string, keywords []string) float64 {
 	}
 	return worst
 }
+
+// isBaseQuality 报告一个匹配质量是否来自末段（目录名）。
+//
+// 末段档位全部 ≥ qualityBaseContain(60)，中间段档位全部 ≤ qualitySegExact(50)，
+// 两个区间不重叠，所以质量本身就能说明命中落在哪一类段上。
+// 这个不变量由 TestBaseTiersAllOutrankMiddleTiers 守着。
+func isBaseQuality(q float64) bool { return q >= qualityBaseContain }
 
 // tierOf 是单段对单个关键词的命中最强档位。
 func tierOf(seg, kw string, isBase bool) float64 {
@@ -256,6 +267,11 @@ func score(q float64, e store.Entry, now int64, halfLifeDays float64) float64 {
 // 最后一级是为了让结果可复现：map 的遍历顺序在 Go 里是随机的。
 func sortCandidates(out []Candidate) {
 	sort.SliceStable(out, func(i, j int) bool {
+		// 末段命中整类排在中间段命中之前，分数只在同类之内比较。
+		// 访问次数再高，也不能把「路径里路过这个名字」顶到「名字就叫这个」前面。
+		if out[i].Anchored != out[j].Anchored {
+			return out[i].Anchored
+		}
 		if out[i].Score != out[j].Score {
 			return out[i].Score > out[j].Score
 		}
@@ -303,9 +319,18 @@ func Decide(cands []Candidate, tau float64, topN int) Decision {
 		top = top[:topN]
 	}
 
-	ratio := 1.0
-	if cands[1].Score > 0 {
-		ratio = cands[0].Score / cands[1].Score
+	// 只跟同类的候选比：末段命中与中间段命中本来就不是一个意图，
+	// 拿它们的分数比值判「歧义」，会得出「只有一条名字命中也要问用户」的怪结论。
+	// 找不到同类对手时比值是 +Inf，即确定。
+	ratio := math.Inf(1)
+	for i := 1; i < len(cands); i++ {
+		if cands[i].Anchored != cands[0].Anchored {
+			continue
+		}
+		if cands[i].Score > 0 {
+			ratio = cands[0].Score / cands[i].Score
+		}
+		break
 	}
 	if tau > 0 && ratio < tau {
 		return Decision{Outcome: OutcomeAmbiguous, Best: cands[0], Top: top, Ratio: ratio}
