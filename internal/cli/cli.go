@@ -8,11 +8,13 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,8 +34,11 @@ const (
 	exitUsage = 2
 )
 
-// listLimit 是 -l 最多列出的候选数。
+// listLimit 是候选列表最多列出的条数。
 const listLimit = 50
+
+// newline 是换行符的字节值。写成常量是为了在源码里避开转义。
+const newline = 10
 
 var usageLines = []string{
 	"jcd —— 记住你去过的目录",
@@ -42,15 +47,17 @@ var usageLines = []string{
 	"  jcd                   回到用户主目录",
 	"  jcd <路径>            进入这个目录，并记住它",
 	"  jcd <关键词...>       跳回之前去过的匹配目录",
+	"  jcd -                 回到上一个目录，跟 cd - 一样",
 	"",
 	"查询开关:",
 	"  -l                    列出候选，不跳转",
-	"  -f                    有多个候选时直接取最高分（默认不猜，交给你）",
+	"  -f                    有多个候选时直接取最高分（默认交给你选）",
 	"",
 	"其它子命令:",
 	"  jcd list              列出记住的全部目录（-prune 顺便清理失效的）",
 	"  jcd add [路径]        只记录不跳转（shell hook 用，平时不用管）",
 	"  jcd init <shell>      输出 shell 集成脚本",
+	"  jcd doctor            体检：PATH、数据文件、shell 集成",
 	"  jcd version           版本",
 	"",
 	"环境变量:",
@@ -74,6 +81,8 @@ func Run(ctx context.Context, args []string) int {
 		return cmdList(ctx, args[1:])
 	case "init":
 		return cmdInit(args[1:])
+	case "doctor":
+		return cmdDoctor()
 	case "version", "--version", "-V":
 		fmt.Printf("jcd %s (commit %s, built %s)\n", version.Version, version.Commit, version.Date)
 		return exitOK
@@ -101,6 +110,16 @@ func cmdQuery(ctx context.Context, args []string) int {
 
 	cfg := config.Load()
 	now := time.Now().Unix()
+
+	// jcd - 回上一个目录，跟 cd - 一个直觉。
+	// shell 函数会自己处理它（更快），这里是直接调用二进制时的兜底。
+	if len(rest) == 1 && rest[0] == "-" {
+		if p, ok := previousDir(); ok {
+			return emitPath(p)
+		}
+		fmt.Fprintln(os.Stderr, "jcd: 找不到上一个目录（OLDPWD 没设置？）")
+		return exitFail
+	}
 
 	// 直接路径优先，而且刻意不碰历史文件：
 	// jcd ~/a/b/c 的语义就是 cd ~/a/b/c，不该依赖历史是否完好。
@@ -149,11 +168,70 @@ func cmdQuery(ctx context.Context, args []string) int {
 		if *force {
 			return emitPath(d.Best.Path)
 		}
-		// 猜错比让你再打两个字贵得多，所以这里不猜。
+		// 猜错比让你多打两个字贵得多，所以这里不猜：
+		// 能问就问，问不了就把候选列出来。
+		if stdinIsTerminal() {
+			if i := pick(d.Top); i >= 0 {
+				return emitPath(d.Top[i].Path)
+			}
+			fmt.Fprintln(os.Stderr, "jcd: 已取消")
+			return exitFail
+		}
 		fmt.Fprintf(os.Stderr, "jcd: 有 %d 个候选不相上下，多给它一点信息，或用 -l 看全部（-f 直接取第一个）:\n", len(d.Top))
 		printCandidates(os.Stderr, d.Top)
 		return exitFail
 	}
+}
+
+// stdinIsTerminal 报告标准输入是不是连着终端。
+//
+// 只看 stdin：shell 函数用 $(...) 捕获了 stdout，但 stdin 仍然是终端，
+// 所以这里读得到人敲的字。
+func stdinIsTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// pick 让用户在候选里挑一个，返回下标；放弃时返回 -1。
+func pick(cands []jump.Candidate) int {
+	if len(cands) == 0 {
+		return -1
+	}
+	limit := len(cands)
+	if limit > listLimit {
+		limit = listLimit
+	}
+
+	fmt.Fprintln(os.Stderr, "jcd: 有多个候选，输入编号选择（直接回车取消）：")
+	printCandidates(os.Stderr, cands[:limit])
+	fmt.Fprint(os.Stderr, "> ")
+
+	line, err := bufio.NewReader(os.Stdin).ReadString(newline)
+	if err != nil && line == "" {
+		return -1
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return -1
+	}
+	n, err := strconv.Atoi(line)
+	if err != nil || n < 1 || n > limit {
+		return -1
+	}
+	return n - 1
+}
+
+// previousDir 从 $OLDPWD 取上一个目录。
+func previousDir() (string, bool) {
+	raw := os.Getenv("OLDPWD")
+	if raw == "" {
+		return "", false
+	}
+	p, err := pathutil.Normalize(raw)
+	if err != nil || !isDir(p) {
+		return "", false
+	}
+	return p, true
 }
 
 // directPath 判断这次调用是不是「直接走进一个真实目录」。
@@ -345,6 +423,13 @@ func cmdInit(args []string) int {
 		return exitUsage
 	}
 	fmt.Print(script)
+	return exitOK
+}
+
+// ------------------------------------------------------------------ doctor
+
+func cmdDoctor() int {
+	fmt.Println("（待实现）")
 	return exitOK
 }
 

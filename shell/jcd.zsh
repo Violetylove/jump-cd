@@ -22,6 +22,10 @@ jcd() {
     add|init|query|list|version|help|--help|-h|--version|-V|__*)
       command jcd "$@"
       ;;
+    -)
+      # 回上一个目录。shell 自己就能做，不必启动二进制。
+      builtin cd - > /dev/null
+      ;;
     *)
       local __jcd_path
       __jcd_path="$(command jcd query "$@")" || return $?

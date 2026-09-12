@@ -18,6 +18,9 @@ function jcd --description 'jump-cd: 目录跳转'
     switch "$__jcd_first"
         case add init query list version help --help -h --version -V '__*'
             command jcd $argv
+        case '-'
+            # 回上一个目录。shell 自己就能做，不必启动二进制。
+            cd -
         case '*'
             set -l __jcd_path (command jcd query $argv)
             if test $status -eq 0; and test -n "$__jcd_path"

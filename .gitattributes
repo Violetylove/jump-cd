@@ -1,0 +1,2 @@
+# shell 脚本里混进 CR 会直接把语法搞坏，一律锁成 LF。
+* text=auto eol=lf
