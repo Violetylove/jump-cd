@@ -1,0 +1,9 @@
+# 构建产物
+/jcd
+/jcd.exe
+/dist/
+/coverage.out
+*.test
+
+# 交叉编译的临时输出
+/.cc

@@ -1,0 +1,39 @@
+version: 2
+
+project_name: jump-cd
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: jcd
+    main: ./cmd/jcd
+    binary: jcd
+    env:
+      # 硬性约束 8：不引入 cgo，交叉编译才能开箱即用。
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/Violetylove/jump-cd/internal/version.Version={{.Version}}
+      - -X github.com/Violetylove/jump-cd/internal/version.Commit={{.Commit}}
+      - -X github.com/Violetylove/jump-cd/internal/version.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
