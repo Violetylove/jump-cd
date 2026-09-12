@@ -108,11 +108,16 @@ score = 匹配质量 x （1 + 去过几次） x 多久没去
 
 | Shell | 记录方式 | 状态 |
 |---|---|---|
-| bash | `PROMPT_COMMAND` + 内建 printf | **e2e 覆盖** |
-| PowerShell（pwsh 7 与 5.1） | 包装 `prompt` + `Add-Content` | **e2e 覆盖** |
-| zsh | `add-zsh-hook chpwd` + 内建 printf | 脚本就位，开发机没装 zsh |
-| fish | `--on-variable PWD` | 脚本就位，开发机没装 fish |
-| nushell | `hooks.env_change.PWD` | 脚本就位，开发机没装 nu |
+| bash | `PROMPT_COMMAND` + 内建 printf | **e2e 覆盖**（Windows / macOS / Linux） |
+| zsh | `add-zsh-hook chpwd` + 内建 printf | **e2e 覆盖**（macOS） |
+| fish | `--on-variable PWD` | **e2e 覆盖**（Linux） |
+| PowerShell | 包装 `prompt` + `Add-Content` | **e2e 覆盖**（pwsh 7 三平台 + Windows PowerShell 5.1） |
+| nushell | `hooks.env_change.PWD` | **未验证** |
+
+能覆盖到哪些 shell，取决于 runner 上装了什么：bash 三平台都有，zsh 只有 macOS 自带，
+pwsh 三平台都有，fish 需要在 Linux job 里装一次。**nushell 刻意不假装覆盖** ——
+它的脚本语法在 0.9x 与 0.10x 之间变动很大，而开发机和 CI 都没有它。
+拿一个没跑过的脚本声索「支持」是不诚实的；`shell/jcd.nu` 仍然提供，状态就是未验证。
 
 PowerShell 那份脚本刻意写成纯 ASCII：5.1 用控制台代码页解码外部程序输出，
 中文注释会被解错并破坏语法。`shell/embed_test.go` 里有守卫。

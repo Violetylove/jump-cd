@@ -45,6 +45,9 @@ jcd init nushell | save -f ~/.jcd.nu
 
 想要更短的名字：`alias j=jcd`。
 
+五套集成的验证程度不一样：bash、zsh、fish、PowerShell 都在 CI 上跑过真实的
+「进去再跳回来」，nushell 的脚本提供了但**没验证过**（开发机与 CI 都没装）。
+
 ## 用法
 
 ```
