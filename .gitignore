@@ -1,6 +1,7 @@
 # 构建产物
 /jcd
 /jcd.exe
+*.exe
 /dist/
 /coverage.out
 *.test
