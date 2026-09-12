@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 // appDir 是各平台下的应用目录名。
@@ -21,7 +22,18 @@ const (
 	EnvDataDir  = "JCD_DATA_DIR"
 	EnvHalfLife = "JCD_HALF_LIFE_DAYS"
 	EnvTau      = "JCD_AMBIGUOUS_TAU"
+	EnvIgnore   = "JCD_IGNORE"
 )
+
+// defaultIgnore 是默认不记录的路径片段。
+// 被 cd 进去不等于「我想再回来」——记下这些只会把候选列表搅浑。
+func defaultIgnore() []string {
+	return []string{
+		"/node_modules/", "/.git/", "/.cache/", "/__pycache__/",
+		"/vendor/", "/.venv/", "/venv/",
+		"/tmp/", "/var/", "/proc/", "/sys/",
+	}
+}
 
 // 默认值。
 const (
@@ -35,6 +47,8 @@ const (
 type Config struct {
 	HalfLifeDays float64
 	AmbiguousTau float64
+	// Ignore 是路径片段名单，命中的目录不会被记录。
+	Ignore []string
 }
 
 // Load 读取配置。任何一项缺失或非法都会安静地退回默认值——
@@ -43,7 +57,24 @@ func Load() Config {
 	return Config{
 		HalfLifeDays: positiveFloat(EnvHalfLife, DefaultHalfLifeDays),
 		AmbiguousTau: positiveFloat(EnvTau, DefaultAmbiguousTau),
+		Ignore:       ignoreList(),
 	}
+}
+
+// ignoreList 合并默认名单与 $JCD_IGNORE（逗号或分号分隔）。
+func ignoreList() []string {
+	out := defaultIgnore()
+	raw := os.Getenv(EnvIgnore)
+	if raw == "" {
+		return out
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ';' })
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func positiveFloat(key string, fallback float64) float64 {

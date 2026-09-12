@@ -11,6 +11,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Violetylove/jump-cd/internal/pathutil"
 	"github.com/Violetylove/jump-cd/internal/store"
@@ -25,7 +26,16 @@ const (
 	qualityBaseContain = 60.0
 	qualityBasePrefix  = 80.0
 	qualityBaseExact   = 100.0
+
+	// qualityBaseFuzzy 是「末段只差一个字符」的档位。
+	// 定得比「末段子串」(60) 高：打错一个字母的往往就是整个目录名，
+	// 那比「碰巧包含这几个字母」是强得多的意图信号。
+	qualityBaseFuzzy = 70.0
 )
+
+// minFuzzyRunes 是启用容错的最短关键词。
+// 太短的词放松一格就会命中一大堆无关目录，得不偿失。
+const minFuzzyRunes = 4
 
 // maxVisitWeight 给「去过几次」封顶：否则一个天天去的目录会永远压住新目标。
 const maxVisitWeight = 20
@@ -112,7 +122,109 @@ func tierOf(seg, kw string, isBase bool) float64 {
 		}
 		return qualitySegContain
 	}
+
+	// 容错：打错一个字母（含相邻两字写反）也要找得到。
+	// 只在末段启用 —— 在中间段放松会大面积误召回。
+	if isBase && utf8.RuneCountInString(kw) >= minFuzzyRunes && withinOneEditAny(kw, seg) {
+		return qualityBaseFuzzy
+	}
 	return qualityNone
+}
+
+// withinOneEditAny 报告 kw 与 seg（或 seg 的一个同长前缀）是否只差一个字符。
+//
+// 比前缀是为了覆盖「目录名比关键词长」的常见情形：
+// 关键词 popluar 对目录 popular-tools，该拿来比的是前缀 popular。
+func withinOneEditAny(kw, seg string) bool {
+	if withinOneEdit(kw, seg) {
+		return true
+	}
+	r := []rune(seg)
+	n := utf8.RuneCountInString(kw)
+	for _, cut := range []int{n, n + 1} {
+		if cut > 0 && cut < len(r) && withinOneEdit(kw, string(r[:cut])) {
+			return true
+		}
+	}
+	return false
+}
+
+// withinOneEdit 报告 a 与 b 是否只差一个字符：替换、增、删，或相邻两字写反。
+//
+// 只判定「差一个」，所以不用写完整的编辑距离算法 —— 直接分类讨论更快也更好读。
+func withinOneEdit(a, b string) bool {
+	ar, br := []rune(a), []rune(b)
+	la, lb := len(ar), len(br)
+
+	switch {
+	case la == lb:
+		diff, first := 0, -1
+		for i := 0; i < la; i++ {
+			if ar[i] != br[i] {
+				diff++
+				if first < 0 {
+					first = i
+				}
+			}
+		}
+		switch diff {
+		case 0, 1:
+			return true
+		case 2:
+			// 相邻两字写反：popluar / popular
+			return first+1 < la && ar[first] == br[first+1] && ar[first+1] == br[first]
+		}
+		return false
+
+	case la+1 == lb:
+		return oneDeletion(ar, br)
+	case lb+1 == la:
+		return oneDeletion(br, ar)
+	}
+	return false
+}
+
+// oneDeletion 报告 long 去掉一个字符后是否等于 short。
+func oneDeletion(short, long []rune) bool {
+	i, j, skipped := 0, 0, false
+	for i < len(short) && j < len(long) {
+		if short[i] == long[j] {
+			i++
+			j++
+			continue
+		}
+		if skipped {
+			return false
+		}
+		skipped = true
+		j++
+	}
+	return true
+}
+
+// Ignored 报告某个目录是否命中忽略名单。
+//
+// 名单里存的是路径片段，比较前统一成「小写、正斜杠、带尾斜杠」，
+// 于是 "/tmp/" 能命中 "/tmp" 也命中 "/tmp/x"，但不会命中 "/tmpx"。
+func Ignored(path string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	p := normaliseForMatch(path, true)
+	for _, pat := range patterns {
+		if pat = normaliseForMatch(pat, false); pat != "" && strings.Contains(p, pat) {
+			return true
+		}
+	}
+	return false
+}
+
+func normaliseForMatch(s string, ensureTrailingSlash bool) string {
+	s = strings.ToLower(strings.ReplaceAll(s, "\\", "/"))
+	if ensureTrailingSlash && !strings.HasSuffix(s, "/") {
+		s += "/"
+	}
+	return s
 }
 
 // score = 匹配质量 x （1 + 去过几次） x 多久没去。

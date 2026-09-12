@@ -133,6 +133,96 @@ func TestSearchIsDeterministic(t *testing.T) {
 	}
 }
 
+// 打错一个字母也要找得到：替换、增、删、相邻写反。
+func TestFuzzyToleratesOneTypo(t *testing.T) {
+	tests := []struct {
+		name string
+		kw   string
+	}{
+		{"相邻写反", "popluar"},
+		{"少一个字母", "populr"},
+		{"多一个字母", "populare"},
+		{"写错一个字母", "populat"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := qualityOf("/home/u/code/popular", tt.kw); got != qualityBaseFuzzy {
+				t.Fatalf("quality(%q) = %v want %v", tt.kw, got, qualityBaseFuzzy)
+			}
+		})
+	}
+}
+
+// 目录名比关键词长时，该拿来比的是「同长前缀」。
+func TestFuzzyComparesAgainstPrefix(t *testing.T) {
+	if got := qualityOf("/home/u/code/popular-tools", "popluar"); got != qualityBaseFuzzy {
+		t.Fatalf("quality = %v want %v", got, qualityBaseFuzzy)
+	}
+}
+
+// 放松必须有限度：太短的词不该容错，差太远的词不该命中。
+func TestFuzzyStaysStrictWhenItShould(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		kw   string
+	}{
+		{"关键词太短", "/home/u/code/car", "cat"},
+		{"差得太远", "/home/u/code/popular", "zzzz"},
+		{"长度差太多", "/home/u/code/popular", "popularity"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := qualityOf(tt.path, tt.kw); got != qualityNone {
+				t.Fatalf("quality = %v，不该命中", got)
+			}
+		})
+	}
+}
+
+// 容错只在末段启用：中间段放松会大面积误召回。
+func TestFuzzyOnlyAppliesToBaseSegment(t *testing.T) {
+	if got := qualityOf("/home/u/popluar/x", "popular"); got != qualityNone {
+		t.Fatalf("中间段不该容错，实际 %v", got)
+	}
+}
+
+func TestIgnored(t *testing.T) {
+	patterns := []string{"/node_modules/", "/tmp/", "/.git/"}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"命中 node_modules", "/home/u/app/node_modules/lodash", true},
+		{"命中 tmp", "/tmp/scratch", true},
+		{"tmp 本身", "/tmp", true},
+		{"命中 .git", "/home/u/app/.git", true},
+		{"普通目录", "/home/u/code/jump-cd", false},
+		{"只是前缀相同", "/home/u/tmpx", false},
+		{"Windows 反斜杠", "C:/Users/u/app/node_modules/x", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Ignored(tt.path, patterns); got != tt.want {
+				t.Fatalf("Ignored(%q) = %v want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+
+	if Ignored("/anything", nil) {
+		t.Fatal("空名单不该忽略任何东西")
+	}
+}
+
+// 忽略名单用的是字面量子串，不是正则 —— 免得路径里的特殊字符炸掉匹配。
+func TestIgnoredIsLiteral(t *testing.T) {
+	if !Ignored("/home/u/[weird]/x", []string{"[weird]"}) {
+		t.Fatal("方括号应当按字面量匹配")
+	}
+}
+
 func TestKeywordsNormalisation(t *testing.T) {
 	got := Keywords([]string{"  Jump ", "", "CD"})
 	if len(got) != 2 || got[0] != "jump" || got[1] != "cd" {

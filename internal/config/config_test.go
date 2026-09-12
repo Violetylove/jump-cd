@@ -42,6 +42,41 @@ func TestLoadHonoursEnv(t *testing.T) {
 	}
 }
 
+// 默认就该挡掉那些「进去过但不代表想再回来」的地方。
+func TestIgnoreHasSensibleDefaults(t *testing.T) {
+	cfg := config.Load()
+	for _, want := range []string{"/node_modules/", "/.git/", "/tmp/"} {
+		found := false
+		for _, p := range cfg.Ignore {
+			if p == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("默认忽略名单里缺少 %q：%v", want, cfg.Ignore)
+		}
+	}
+}
+
+func TestIgnoreMergesEnv(t *testing.T) {
+	t.Setenv(config.EnvIgnore, " /custom/, ;/another; , ")
+
+	cfg := config.Load()
+	for _, want := range []string{"/node_modules/", "/custom/", "/another"} {
+		found := false
+		for _, p := range cfg.Ignore {
+			if p == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("名单里缺少 %q：%v", want, cfg.Ignore)
+		}
+	}
+}
+
 func TestDataPathsFollowEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(config.EnvDataDir, dir)

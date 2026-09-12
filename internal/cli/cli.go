@@ -64,6 +64,7 @@ var usageLines = []string{
 	"  JCD_DATA_DIR          数据目录",
 	"  JCD_HALF_LIFE_DAYS    记忆半衰期，默认 7 天",
 	"  JCD_AMBIGUOUS_TAU     歧义阈值，默认 1.25",
+	"  JCD_IGNORE            追加忽略规则，逗号或分号分隔（如 /.cache/,foo）",
 }
 
 // Run 执行一次命令行调用，返回进程退出码。
@@ -142,7 +143,7 @@ func cmdQuery(ctx context.Context, args []string) int {
 	}
 
 	// 先把手敲命令期间的访问日志折进历史，否则刚去过的目录还看不到。
-	if err := foldJournal(st, now); err != nil {
+	if err := foldJournal(st, cfg, now); err != nil {
 		fmt.Fprintln(os.Stderr, "jcd: 折叠访问日志失败:", err)
 	}
 
@@ -367,13 +368,16 @@ func cmdList(ctx context.Context, args []string) int {
 		return fail(err)
 	}
 	now := time.Now().Unix()
-	if err := foldJournal(st, now); err != nil {
+	cfg := config.Load()
+	if err := foldJournal(st, cfg, now); err != nil {
 		fmt.Fprintln(os.Stderr, "jcd: 折叠访问日志失败:", err)
 	}
 
 	if *prune {
 		if err := st.Update(func(d *store.Data) error {
-			removed := d.Prune(isDir)
+			removed := d.Prune(func(p string) bool {
+				return isDir(p) && !jump.Ignored(p, cfg.Ignore)
+			})
 			fmt.Fprintf(os.Stderr, "清理了 %d 条失效记录\n", removed)
 			return nil
 		}); err != nil {
@@ -456,7 +460,7 @@ func openStore() (*store.Store, error) {
 // foldJournal 把 shell 直接追加的访问日志折进历史。
 //
 // 日志是「先追加、后折叠」：hook 只写一行，昂贵的部分推迟到你敲 jcd 的时候做。
-func foldJournal(st *store.Store, now int64) error {
+func foldJournal(st *store.Store, cfg config.Config, now int64) error {
 	jp, err := config.JournalPath()
 	if err != nil {
 		return err
@@ -475,6 +479,11 @@ func foldJournal(st *store.Store, now int64) error {
 		for _, e := range entries {
 			p, nErr := pathutil.Normalize(e.Path)
 			if nErr != nil {
+				continue
+			}
+			// 忽略名单在这里生效：记录的唯一入口就是折叠，
+			// 所以只要拦住这一处就够了。
+			if jump.Ignored(p, cfg.Ignore) {
 				continue
 			}
 			t := e.Time
