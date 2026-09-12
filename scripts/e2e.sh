@@ -75,9 +75,12 @@ run_shell() {
 
 run_shell bash       "$repo/scripts/e2e-inner.bash"
 run_shell zsh        "$repo/scripts/e2e-inner.bash"
-run_shell fish       "$repo/scripts/e2e-inner.bash"
+run_shell fish       "$repo/scripts/e2e-inner.fish"
 run_shell pwsh       "$repo/scripts/e2e-inner.ps1"
 run_shell powershell "$repo/scripts/e2e-inner.ps1"
-run_shell nu         "$repo/scripts/e2e-inner.bash"
+
+# nushell 刻意不在这里跑：它的脚本语法在 0.9x 与 0.10x 之间变动很大，
+# 而开发机与 CI 都没有它 —— 拿一个没验证过的脚本声索「支持」是不诚实的。
+# shell/jcd.nu 仍然提供，但状态是「未验证」，见 DESIGN.md 第 9 节。
 
 exit $status
