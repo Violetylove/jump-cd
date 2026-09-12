@@ -58,6 +58,27 @@ CGO_ENABLED=0 GOOS=windows go build ./cmd/jcd   # 交叉编译必须始终可用
 校验和不匹配时是否拒绝。**在 Windows 上直接跑 `install.sh` 会因为平台检测提前退出**，
 这是对的，别为此加特例。
 
+## 发布
+
+**凡是影响可执行产物的改动，必须打了 tag 再推送。**
+
+安装脚本从 `raw.githubusercontent.com/.../main/scripts/` 取脚本，却从 **GitHub Releases**
+取二进制。于是脚本永远是最新的，二进制只跟着最新的 `v*` tag 走 —— 只推 `main` 不发版，
+用户的 `irm ... | iex` 只会把同一个旧版本原地重装一遍，修复根本到不了用户手里。
+发布只由 `.github/workflows/release.yml` 在推 `v*` tag 时触发，goreleaser 出四平台包
+与 `checksums.txt`。
+
+改动落地的主线因此是：
+
+1. 改代码，本地跑 `gofmt -l .` / `go vet ./...` / `go test ./...` 全绿
+2. 提交（英文 Conventional Commits）
+3. **打 annotated tag**（`git tag -a v0.x.y -m "jump-cd v0.x.y"`）
+4. 推分支与 tag（`git push origin main --follow-tags`）
+5. 等 `release` workflow 出包，再让用户重跑安装命令升级
+
+纯文档、测试、CI 这类不影响二进制的改动可以不发版（goreleaser 的 changelog 也会过滤
+`docs:` / `test:` / `chore:`）。**拿不准某次改动算不算「影响可执行产物」时，按算处理。**
+
 ## 硬性约束（违反 = 打回）
 
 1. **stdout 是协议通道。** 成功时 stdout 里只有一行目标路径 —— shell 函数拿它的内容去 `cd`。
